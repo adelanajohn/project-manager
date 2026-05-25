@@ -159,6 +159,9 @@ importers:
       '@pm/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@pm/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: 5.48.0
         version: 5.48.0(react@18.3.1)
@@ -336,6 +339,40 @@ importers:
       rimraf:
         specifier: 5.0.9
         version: 5.0.9
+      typescript:
+        specifier: 5.5.3
+        version: 5.5.3
+
+  packages/ui:
+    dependencies:
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
+      framer-motion:
+        specifier: 11.2.12
+        version: 11.2.12(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      lucide-react:
+        specifier: 0.400.0
+        version: 0.400.0(react@18.3.1)
+      react:
+        specifier: '>=18'
+        version: 18.3.1
+      react-dom:
+        specifier: '>=18'
+        version: 18.3.1(react@18.3.1)
+      tailwind-merge:
+        specifier: 2.4.0
+        version: 2.4.0
+    devDependencies:
+      '@types/node':
+        specifier: 20.14.9
+        version: 20.14.9
+      '@types/react':
+        specifier: 18.3.3
+        version: 18.3.3
+      '@types/react-dom':
+        specifier: 18.3.0
+        version: 18.3.0
       typescript:
         specifier: 5.5.3
         version: 5.5.3
