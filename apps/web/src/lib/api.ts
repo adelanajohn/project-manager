@@ -98,6 +98,7 @@ export const endpoints = {
       api.delete(`/api/v1/orgs/${orgId}/members/${userId}`),
     notifications: (orgId: string, params?: unknown) =>
       api.get(`/api/v1/orgs/${orgId}/notifications`, { params }),
+    dashboard: (orgId: string) => api.get(`/api/v1/orgs/${orgId}/dashboard`),
   },
   projects: {
     list: (orgId: string) => api.get(`/api/v1/orgs/${orgId}/projects`),

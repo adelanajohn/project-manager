@@ -23,6 +23,15 @@ export type { StatusBadgeProps, StatusCategory } from './components/StatusBadge'
 export { Modal } from './components/Modal';
 export type { ModalProps } from './components/Modal';
 
+export { Sheet } from './components/Sheet';
+export type { SheetProps, SheetSide } from './components/Sheet';
+
+export { Tooltip } from './components/Tooltip';
+export type { TooltipProps, TooltipSide } from './components/Tooltip';
+
+export { DropdownMenu } from './components/DropdownMenu';
+export type { DropdownMenuProps, DropdownItem, DropdownEntry } from './components/DropdownMenu';
+
 export { Kbd } from './components/Kbd';
 
 // Gantt

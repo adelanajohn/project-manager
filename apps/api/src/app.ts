@@ -154,6 +154,10 @@ export async function buildApp() {
   await app.register(apiKeyRoutes, { prefix: '/api/v1' });
   await app.register(inviteRoutes, { prefix: '/api/v1' });
 
+  // Org dashboard analytics
+  const { default: orgDashboardRoutes } = await import('./routes/orgDashboard.js');
+  await app.register(orgDashboardRoutes, { prefix: '/api/v1' });
+
   // Global error handler
   app.setErrorHandler((error, request, reply) => {
     const log = request.log ?? app.log;

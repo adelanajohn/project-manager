@@ -18,6 +18,7 @@ export const queryKeys = {
     members: (orgId: string, cursor?: string) => ['orgs', orgId, 'members', cursor] as const,
     notifications: (orgId: string, cursor?: string) => ['orgs', orgId, 'notifications', cursor] as const,
     labels: (orgId: string) => ['orgs', orgId, 'labels'] as const,
+    dashboard: (orgId: string) => ['orgs', orgId, 'dashboard'] as const,
   },
 
   // Projects
