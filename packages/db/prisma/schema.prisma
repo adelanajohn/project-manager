@@ -1,0 +1,661 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum PlatformRole {
+  platform_admin
+  platform_support
+}
+
+enum TenantRole {
+  tenant_admin
+  tenant_manager
+  tenant_member
+  tenant_viewer
+  tenant_guest
+}
+
+enum ProjectRole {
+  project_lead
+  project_viewer
+}
+
+enum OrgPlan {
+  free
+  pro
+  enterprise
+}
+
+enum ProjectType {
+  scrum
+  kanban
+}
+
+enum ProjectStatus {
+  active
+  archived
+}
+
+enum IssueType {
+  epic
+  story
+  task
+  bug
+  subtask
+}
+
+enum IssuePriority {
+  urgent
+  high
+  medium
+  low
+  none
+}
+
+enum SprintStatus {
+  planned
+  active
+  completed
+}
+
+enum StatusCategory {
+  backlog
+  todo
+  in_progress
+  done
+  canceled
+}
+
+enum SubscriptionStatus {
+  active
+  trialing
+  past_due
+  canceled
+  paused
+}
+
+// ==================== CORE MODELS ====================
+
+model Organization {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  logoUrl     String?   @map("logo_url")
+  plan        OrgPlan   @default(free)
+  suspendedAt DateTime? @map("suspended_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  members      OrgMember[]
+  projects     Project[]
+  issues       Issue[]
+  sprints      Sprint[]
+  epics        Epic[]
+  labels       Label[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+  subscription Subscription?
+  featureFlagOverrides FeatureFlagOverride[]
+  automationRules AutomationRule[]
+  changelogReads ChangelogRead[]
+  docComments  DocComment[]
+  attachments  Attachment[]
+
+  @@map("organizations")
+}
+
+model User {
+  id               String        @id @default(uuid())
+  email            String        @unique
+  passwordHash     String        @map("password_hash")
+  fullName         String        @map("full_name")
+  avatarUrl        String?       @map("avatar_url")
+  platformRole     PlatformRole? @map("platform_role")
+  mfaSecret        String?       @map("mfa_secret")
+  emailVerifiedAt  DateTime?     @map("email_verified_at")
+  lastLoginAt      DateTime?     @map("last_login_at")
+  cookieConsent    String?       @map("cookie_consent")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  sessions         Session[]
+  orgMemberships   OrgMember[]
+  projectMemberships ProjectMember[]
+  reportedIssues   Issue[]      @relation("reporter")
+  assignedIssues   Issue[]      @relation("assignee")
+  comments         Comment[]
+  notifications    Notification[]
+  timeLogs         TimeLog[]
+  auditLogs        AuditLog[]
+  apiKeys          ApiKey[]
+  changelogReads   ChangelogRead[]
+  docComments      DocComment[]
+  resolvedDocComments DocComment[] @relation("resolved_by")
+  docs             Doc[]
+  attachments      Attachment[]
+
+  @@map("users")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  refreshTokenHash String    @map("refresh_token_hash")
+  tokenFamily      String    @map("token_family")
+  deviceInfo       String?   @map("device_info")
+  ipAddress        String?   @map("ip_address")
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model OrgMember {
+  orgId     String     @map("org_id")
+  userId    String     @map("user_id")
+  role      TenantRole @default(tenant_member)
+  invitedBy String?    @map("invited_by")
+  joinedAt  DateTime   @default(now()) @map("joined_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@map("org_members")
+}
+
+model ProjectMember {
+  projectId String       @map("project_id")
+  userId    String       @map("user_id")
+  role      ProjectRole?
+  addedAt   DateTime     @default(now()) @map("added_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model Project {
+  id                String        @id @default(uuid())
+  orgId             String        @map("org_id")
+  name              String
+  description       String?
+  identifier        String        // e.g., "ENG"
+  type              ProjectType   @default(scrum)
+  color             String        @default("#6366F1")
+  status            ProjectStatus @default(active)
+  defaultAssigneeId String?       @map("default_assignee_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  members      ProjectMember[]
+  issues       Issue[]
+  sprints      Sprint[]
+  epics        Epic[]
+  statuses     ProjectStatusConfig[]
+  labels       Label[]
+  docs         Doc[]
+  milestones   Milestone[]
+  templates    IssueTemplate[]
+  automations  AutomationRule[]
+
+  @@unique([orgId, identifier])
+  @@map("projects")
+}
+
+model ProjectStatusConfig {
+  id        String         @id @default(uuid())
+  projectId String         @map("project_id")
+  name      String
+  color     String         @default("#64748B")
+  category  StatusCategory
+  position  Int            @default(0)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("project_statuses")
+}
+
+model Label {
+  id        String   @id @default(uuid())
+  orgId     String   @map("org_id")
+  projectId String?  @map("project_id")
+  name      String
+  color     String   @default("#64748B")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("labels")
+}
+
+model Issue {
+  id           String        @id @default(uuid())
+  orgId        String        @map("org_id")
+  projectId    String        @map("project_id")
+  issueKey     String        @map("issue_key")
+  title        String
+  description  Json?
+  type         IssueType     @default(task)
+  statusId     String?       @map("status_id")
+  priority     IssuePriority @default(medium)
+  assigneeId   String?       @map("assignee_id")
+  reporterId   String        @map("reporter_id")
+  parentId     String?       @map("parent_id")
+  sprintId     String?       @map("sprint_id")
+  milestoneId  String?       @map("milestone_id")
+  epicId       String?       @map("epic_id")
+  estimate     Float?
+  estimateMin  Int?          @map("estimate_min")
+  dueDate      DateTime?     @map("due_date")
+  rank         Float         @default(0)
+  deletedAt    DateTime?     @map("deleted_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status       ProjectStatusConfig? @relation(fields: [statusId], references: [id])
+  assignee     User?               @relation("assignee", fields: [assigneeId], references: [id])
+  reporter     User                @relation("reporter", fields: [reporterId], references: [id])
+  parent       Issue?              @relation("subtasks", fields: [parentId], references: [id])
+  subtasks     Issue[]             @relation("subtasks")
+  sprint       Sprint?             @relation(fields: [sprintId], references: [id])
+  milestone    Milestone?          @relation(fields: [milestoneId], references: [id])
+  epic         Epic?               @relation(fields: [epicId], references: [id])
+  comments     Comment[]
+  timeLogs     TimeLog[]
+  attachments  Attachment[]
+  blockedBy    IssueLink[]         @relation("blocker")
+  blocks       IssueLink[]         @relation("blocked")
+
+  @@unique([orgId, issueKey])
+  @@map("issues")
+}
+
+model IssueLink {
+  id         String @id @default(uuid())
+  blockerId  String @map("blocker_id")
+  blockedId  String @map("blocked_id")
+  linkType   String @default("blocks") @map("link_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  blocker Issue @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked Issue @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@map("issue_links")
+}
+
+model Sprint {
+  id          String       @id @default(uuid())
+  projectId   String       @map("project_id")
+  orgId       String       @map("org_id")
+  name        String
+  goal        String?
+  startDate   DateTime?    @map("start_date")
+  endDate     DateTime?    @map("end_date")
+  status      SprintStatus @default(planned)
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues       Issue[]
+
+  @@map("sprints")
+}
+
+model Epic {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  orgId       String   @map("org_id")
+  title       String
+  description String?
+  color       String   @default("#6366F1")
+  status      String   @default("open")
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues       Issue[]
+
+  @@map("epics")
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String    @map("project_id")
+  name        String
+  description String?
+  dueDate     DateTime? @map("due_date")
+  status      String    @default("open")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("milestones")
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  issueId   String    @map("issue_id")
+  orgId     String    @map("org_id")
+  authorId  String    @map("author_id")
+  body      Json
+  parentId  String?   @map("parent_id")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  issue    Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id])
+  parent   Comment?  @relation("replies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("replies")
+
+  @@map("comments")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  orgId        String?  @map("org_id")
+  actorId      String?  @map("actor_id")
+  actorRole    String?  @map("actor_role")
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  metadata     Json?
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  actor        User?         @relation(fields: [actorId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  orgId     String    @map("org_id")
+  type      String
+  payload   Json
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  orgId       String   @map("org_id")
+  issueId     String   @map("issue_id")
+  uploaderId  String   @map("uploader_id")
+  filename    String
+  mimeType    String   @map("mime_type")
+  sizeBytes   Int      @map("size_bytes")
+  s3Key       String   @map("s3_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploader     User         @relation(fields: [uploaderId], references: [id])
+
+  @@map("attachments")
+}
+
+model Doc {
+  id        String    @id @default(uuid())
+  projectId String    @map("project_id")
+  orgId     String    @map("org_id")
+  parentId  String?   @map("parent_id")
+  title     String
+  content   Json?
+  authorId  String    @map("author_id")
+  version   Int       @default(1)
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id])
+  parent   Doc?      @relation("doc_tree", fields: [parentId], references: [id])
+  children Doc[]     @relation("doc_tree")
+  comments DocComment[]
+
+  @@map("docs")
+}
+
+model DocComment {
+  id         String    @id @default(uuid())
+  docId      String    @map("doc_id")
+  orgId      String    @map("org_id")
+  authorId   String    @map("author_id")
+  blockId    String    @map("block_id")
+  quote      String?
+  body       String
+  resolved   Boolean   @default(false)
+  resolvedBy String?   @map("resolved_by")
+  resolvedAt DateTime? @map("resolved_at")
+  parentId   String?   @map("parent_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  doc        Doc        @relation(fields: [docId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id])
+  resolver   User?      @relation("resolved_by", fields: [resolvedBy], references: [id])
+  parent     DocComment?  @relation("doc_comment_replies", fields: [parentId], references: [id])
+  replies    DocComment[] @relation("doc_comment_replies")
+
+  @@map("doc_comments")
+}
+
+model TimeLog {
+  id          String   @id @default(uuid())
+  issueId     String   @map("issue_id")
+  orgId       String   @map("org_id")
+  userId      String   @map("user_id")
+  loggedAt    DateTime @default(now()) @map("logged_at")
+  durationMin Int      @map("duration_min")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@map("time_logs")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  orgId                String             @unique @map("org_id")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  plan                 OrgPlan            @default(free)
+  status               SubscriptionStatus @default(active)
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  quantity             Int                @default(1)
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  orgId           String   @map("org_id")
+  stripeInvoiceId String   @unique @map("stripe_invoice_id")
+  amountCents     Int      @map("amount_cents")
+  currency        String   @default("usd")
+  status          String
+  invoicePdfUrl   String?  @map("invoice_pdf_url")
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("invoices")
+}
+
+model IssueTemplate {
+  id                String        @id @default(uuid())
+  projectId         String        @map("project_id")
+  orgId             String        @map("org_id")
+  name              String
+  description       String?
+  icon              String?
+  defaultType       IssueType     @default(task) @map("default_type")
+  defaultPriority   IssuePriority @default(medium) @map("default_priority")
+  defaultLabels     String[]      @map("default_labels")
+  defaultAssigneeId String?       @map("default_assignee_id")
+  titleTemplate     String?       @map("title_template")
+  bodyTemplate      Json?         @map("body_template")
+  checklist         Json?
+  createdBy         String        @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("issue_templates")
+}
+
+model AutomationRule {
+  id            String    @id @default(uuid())
+  projectId     String    @map("project_id")
+  orgId         String    @map("org_id")
+  name          String
+  enabled       Boolean   @default(true)
+  triggerType   String    @map("trigger_type")
+  triggerConfig Json?     @map("trigger_config")
+  conditions    Json      @default("[]")
+  actions       Json      @default("[]")
+  runCount      Int       @default(0) @map("run_count")
+  lastRunAt     DateTime? @map("last_run_at")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runLogs      AutomationRunLog[]
+
+  @@map("automation_rules")
+}
+
+model AutomationRunLog {
+  id           String   @id @default(uuid())
+  ruleId       String   @map("rule_id")
+  issueId      String?  @map("issue_id")
+  triggeredBy  String   @map("triggered_by")
+  status       String
+  actionsTaken Json     @default("[]") @map("actions_taken")
+  error        String?
+  durationMs   Int?     @map("duration_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@map("automation_run_logs")
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  overrides FeatureFlagOverride[]
+
+  @@map("feature_flags")
+}
+
+model FeatureFlagOverride {
+  flagId      String  @map("flag_id")
+  targetType  String  @map("target_type")
+  targetId    String  @map("target_id")
+  enabled     Boolean
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  flag         FeatureFlag    @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  organization Organization?  @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@id([flagId, targetType, targetId])
+  @@map("feature_flag_overrides")
+}
+
+model ChangelogEntry {
+  id          String    @id @default(uuid())
+  title       String
+  body        Json
+  category    String
+  publishedAt DateTime? @map("published_at")
+  createdBy   String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  reads ChangelogRead[]
+
+  @@map("changelog_entries")
+}
+
+model ChangelogRead {
+  userId  String   @map("user_id")
+  entryId String   @map("entry_id")
+  orgId   String   @map("org_id")
+  readAt  DateTime @default(now()) @map("read_at")
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entry        ChangelogEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([userId, entryId])
+  @@map("changelog_reads")
+}

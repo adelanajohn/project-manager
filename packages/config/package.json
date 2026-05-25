@@ -1,0 +1,6 @@
+{
+  "name": "@pm/config",
+  "version": "0.1.0",
+  "private": true,
+  "files": ["eslint-preset.js", "prettier.config.js", "tsconfig.base.json", "tsconfig.node.json", "tailwind.config.base.js"]
+}

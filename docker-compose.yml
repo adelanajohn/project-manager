@@ -1,0 +1,105 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pm_postgres
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pm_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app_user -d pm_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pm_redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: pm_api
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://app_user:password@postgres:5432/pm_db
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+      PORT: 3000
+      APP_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:5173
+    env_file:
+      - apps/api/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages:/app/packages
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/api/src
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: pm_worker
+    environment:
+      DATABASE_URL: postgresql://app_user:password@postgres:5432/pm_db
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: development
+    env_file:
+      - apps/worker/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/worker/src:/app/apps/worker/src
+      - ./packages:/app/packages
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: pm_web
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_WS_URL: ws://localhost:3000
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+    develop:
+      watch:
+        - action: sync
+          path: apps/web/src
+          target: /app/apps/web/src
+
+volumes:
+  postgres_data:
+  redis_data:
