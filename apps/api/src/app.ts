@@ -123,6 +123,7 @@ export async function buildApp() {
   // App plugins
   await app.register(correlationIdPlugin);
   await app.register(authPlugin);
+  await app.register((await import('./plugins/rls.js')).default);
 
   // Routes
   await app.register(healthRoutes);
@@ -137,6 +138,19 @@ export async function buildApp() {
   await app.register(adminRoutes, { prefix: '/api/v1/admin' });
   await app.register(attachmentRoutes, { prefix: '/api/v1' });
   await app.register(docRoutes, { prefix: '/api/v1' });
+
+  // Additional routes
+  const { default: milestoneRoutes } = await import('./routes/milestones.js');
+  const { default: labelRoutes } = await import('./routes/labels.js');
+  const { default: timeLogRoutes } = await import('./routes/timeLogs.js');
+  const { default: issueLinkRoutes } = await import('./routes/issueLinks.js');
+  const { default: apiKeyRoutes } = await import('./routes/apiKeys.js');
+
+  await app.register(milestoneRoutes, { prefix: '/api/v1' });
+  await app.register(labelRoutes, { prefix: '/api/v1' });
+  await app.register(timeLogRoutes, { prefix: '/api/v1' });
+  await app.register(issueLinkRoutes, { prefix: '/api/v1' });
+  await app.register(apiKeyRoutes, { prefix: '/api/v1' });
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {

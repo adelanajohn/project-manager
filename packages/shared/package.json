@@ -14,7 +14,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run"
   },
   "dependencies": {
     "zod": "3.23.8"
@@ -23,6 +24,7 @@
     "typescript": "5.5.3",
     "@types/node": "20.14.9",
     "@pm/config": "workspace:*",
-    "rimraf": "5.0.9"
+    "rimraf": "5.0.9",
+    "vitest": "1.6.0"
   }
 }
