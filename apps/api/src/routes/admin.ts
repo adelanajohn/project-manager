@@ -1,11 +1,25 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@pm/db';
 import { allQueues } from '../queues/index.js';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
+import { FastifyAdapter } from '@bull-board/fastify';
 
 export default async function adminRoutes(app: FastifyInstance) {
   // All admin routes require platform admin
   app.addHook('preHandler', app.authenticate);
   app.addHook('preHandler', app.requirePlatformAdmin);
+
+  // ── Bull Board queue monitor ────────────────────────────────────────────
+  const serverAdapter = new FastifyAdapter();
+  serverAdapter.setBasePath('/api/v1/admin/queues');
+
+  createBullBoard({
+    queues: allQueues.map((q) => new BullMQAdapter(q)),
+    serverAdapter,
+  });
+
+  await app.register(serverAdapter.registerPlugin(), { prefix: '/queues', basePath: '/api/v1/admin/queues' });
 
   // GET /admin/orgs
   app.get('/orgs', {

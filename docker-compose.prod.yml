@@ -1,0 +1,114 @@
+version: '3.9'
+
+# Production overrides for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-pm_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Remove the init script bind mount; extensions are pre-seeded
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=4MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+
+  redis:
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 60
+      --loglevel notice
+
+  api:
+    restart: unless-stopped
+    image: ghcr.io/${GITHUB_REPOSITORY:-owner/project-manager}/api:${IMAGE_TAG:-latest}
+    # No bind mounts in production
+    volumes: []
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  worker:
+    restart: unless-stopped
+    image: ghcr.io/${GITHUB_REPOSITORY:-owner/project-manager}/worker:${IMAGE_TAG:-latest}
+    volumes: []
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  web:
+    restart: unless-stopped
+    image: ghcr.io/${GITHUB_REPOSITORY:-owner/project-manager}/web:${IMAGE_TAG:-latest}
+    volumes: []
+    ports:
+      - '80:80'
+      - '443:443'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  postgres_data:
+    external: true   # must be created before first deploy: docker volume create postgres_data
+  redis_data:
+    external: true   # docker volume create redis_data

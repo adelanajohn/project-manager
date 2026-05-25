@@ -2,6 +2,7 @@ import { prisma } from '@pm/db';
 import { can, PermissionError } from '@pm/shared';
 import type { CreateSprintInput, UpdateSprintInput, CompleteSprintInput, RequestContext } from '@pm/shared';
 import { analyticsQueue, auditQueue } from '../queues/index.js';
+import { emitToProject } from '../socket.js';
 
 export const sprintService = {
   async list(projectId: string, orgId: string) {
@@ -81,6 +82,8 @@ export const sprintService = {
       resourceId: sprintId,
     });
 
+    emitToProject(sprint.projectId, 'sprint.updated', { sprintId, projectId: sprint.projectId, status: 'active' });
+
     return updated;
   },
 
@@ -134,6 +137,8 @@ export const sprintService = {
       resourceType: 'sprint',
       resourceId: sprintId,
     });
+
+    emitToProject(sprint.projectId, 'sprint.updated', { sprintId, projectId: sprint.projectId, status: 'completed' });
 
     return { sprint: completed, movedIssues: incompleteIssues.length };
   },

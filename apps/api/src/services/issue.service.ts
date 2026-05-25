@@ -2,6 +2,7 @@ import { prisma } from '@pm/db';
 import { can, PermissionError } from '@pm/shared';
 import type { CreateIssueInput, UpdateIssueInput, UpdateIssueRankInput, CreateCommentInput, BulkUpdateIssuesInput, RequestContext } from '@pm/shared';
 import { notificationQueue, auditQueue, searchIndexQueue } from '../queues/index.js';
+import { emitToProject } from '../socket.js';
 
 const issueInclude = {
   assignee: { select: { id: true, fullName: true, avatarUrl: true } },
@@ -106,6 +107,9 @@ export const issueService = {
       }),
     ]);
 
+    // Real-time: push to all clients viewing this project
+    emitToProject(projectId, 'issue.created', { issueId: issue.id, projectId, orgId });
+
     return issue;
   },
 
@@ -170,6 +174,9 @@ export const issueService = {
       }),
     ]);
 
+    // Real-time
+    emitToProject(updated.projectId, 'issue.updated', { issueId, projectId: updated.projectId, orgId, changes: input });
+
     return updated;
   },
 
@@ -185,6 +192,9 @@ export const issueService = {
     if (!canDeleteAny && !(canDeleteOwn && isOwn)) throw new PermissionError('Insufficient permissions');
 
     await prisma.issue.update({ where: { id: issueId }, data: { deletedAt: new Date() } });
+
+    // Real-time
+    emitToProject(issue.projectId, 'issue.deleted', { issueId, projectId: issue.projectId, orgId });
 
     await auditQueue.add('log', {
       correlationId: ctx.correlationId,
@@ -249,6 +259,12 @@ export const issueService = {
       actorId: ctx.userId,
       commentId: comment.id,
     });
+
+    // Real-time: broadcast comment to issue room
+    const issue = await prisma.issue.findFirst({ where: { id: issueId }, select: { projectId: true } });
+    if (issue) {
+      emitToProject(issue.projectId, 'comment.created', { commentId: comment.id, issueId, projectId: issue.projectId });
+    }
 
     return comment;
   },

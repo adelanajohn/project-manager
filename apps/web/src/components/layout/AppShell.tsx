@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useUIStore } from '@/stores/ui.store';
@@ -12,6 +13,7 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const { sidebarOpen, setCommandPaletteOpen } = useUIStore();
+  const location = useLocation();
 
   useHotkeys('mod+k', (e) => {
     e.preventDefault();

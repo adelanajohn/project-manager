@@ -145,12 +145,14 @@ export async function buildApp() {
   const { default: timeLogRoutes } = await import('./routes/timeLogs.js');
   const { default: issueLinkRoutes } = await import('./routes/issueLinks.js');
   const { default: apiKeyRoutes } = await import('./routes/apiKeys.js');
+  const { default: inviteRoutes } = await import('./routes/invites.js');
 
   await app.register(milestoneRoutes, { prefix: '/api/v1' });
   await app.register(labelRoutes, { prefix: '/api/v1' });
   await app.register(timeLogRoutes, { prefix: '/api/v1' });
   await app.register(issueLinkRoutes, { prefix: '/api/v1' });
   await app.register(apiKeyRoutes, { prefix: '/api/v1' });
+  await app.register(inviteRoutes, { prefix: '/api/v1' });
 
   // Global error handler
   app.setErrorHandler((error, request, reply) => {

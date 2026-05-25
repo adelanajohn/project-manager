@@ -28,6 +28,8 @@
     "@socket.io/redis-adapter": "8.3.0",
     "bcrypt": "5.1.1",
     "bullmq": "5.8.3",
+    "@bull-board/api": "5.19.1",
+    "@bull-board/fastify": "5.19.1",
     "fastify": "4.28.1",
     "fastify-plugin": "4.5.1",
     "ioredis": "5.4.1",
